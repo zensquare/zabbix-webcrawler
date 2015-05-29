@@ -18,8 +18,8 @@ It's early days still but functional in my setup but treat as experimental.
 ## Configure in zabbix
 - Setup zabbix agent - add the following to zabbix_agent.conf or in a new zabbix_agent.d/.conf file.
  - UserParameter=spider[*],/usr/bin/php <PATH TO CRAWL.php>/crawl.php $1 $2
--Import the webcrawler template into zabbix (template.xml)
--Add template to hosts - the template expects the host name to be a domain name. In the future this may change to use a URL macro.
+- Import the webcrawler template into zabbix (template.xml)
+- Add template to hosts - the template expects the host name to be a domain name. In the future this may change to use a URL macro.
 
 ##Setup options
 You can install this on any* server that has the zabbix_agent installed - just configure the agent interface to point to this server
