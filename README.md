@@ -2,7 +2,7 @@
 A webcrawler designed to be used with zabbix to check the health of a website
 
 ## Work in progress
-It's early days still but functional in my setup but treat as experimental.
+It's early days still; functional in my setup but treat as experimental.
 
 ## Getting started
 - Download
