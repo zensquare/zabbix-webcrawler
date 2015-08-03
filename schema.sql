@@ -35,7 +35,7 @@ CREATE TABLE `access` (
   PRIMARY KEY (`aid`),
   KEY `fk_page_idx` (`page`),
   CONSTRAINT `fk_page` FOREIGN KEY (`page`) REFERENCES `page` (`aid`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=1619141 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -49,6 +49,8 @@ CREATE TABLE `link` (
   `parent` int(11) NOT NULL,
   `child` int(11) NOT NULL,
   `link_title` varchar(256) DEFAULT NULL,
+  `hidden` 		int(1) DEFAULT 0,
+  `depth` 		int(3) DEFAULT 1,
   PRIMARY KEY (`parent`,`child`),
   KEY `fk_page_idx` (`child`),
   CONSTRAINT `fk_link_parent` FOREIGN KEY (`parent`) REFERENCES `page` (`aid`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -72,10 +74,11 @@ CREATE TABLE `page` (
   `ts_last` timestamp NULL DEFAULT NULL,
   `status` varchar(45) DEFAULT NULL,
   `crawl` int(1) DEFAULT '1',
+  `depth` int(3) DEFAULT 1,
   PRIMARY KEY (`aid`),
   KEY `fk_website_idx` (`website`),
   CONSTRAINT `fk_website` FOREIGN KEY (`website`) REFERENCES `website` (`aid`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=1396 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -90,7 +93,7 @@ CREATE TABLE `website` (
   `name` varchar(45) DEFAULT NULL,
   `url` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`aid`)
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

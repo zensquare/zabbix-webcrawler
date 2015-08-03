@@ -1,11 +1,20 @@
 <?php
+if(php_sapi_name() !== 'cli'){
+    die("Please run from commandline");
+}
+
+define("ZABBIX_CRAWLER", true);
 
 include('config.php');
 
-if (count($argv) < 2) {
+if (count($argv) <= 1) {
     $action = "help";
+} else if (count($argv) == 2) {
+    $action = $argv[1];
 } else {
     $action = $argv[2];
+    $website = cleanWebsiteURL($argv[1]);
+    $wid = getWebsiteID($website);
 }
 
 if(isset($argv[3]) && $argv[3] == "debug"){
@@ -14,8 +23,6 @@ if(isset($argv[3]) && $argv[3] == "debug"){
     $time_limit = 30;
 }
 
-$website = cleanWebsiteURL($argv[1]);
-$wid = getWebsiteID($website);
 
 $args = array();
 if (strpos($action, '.') > 0) {
@@ -34,12 +41,22 @@ switch ($action) {
             echo "undefined";
         }
         break;
+    case "list":
+        listWebsites();
+        break;
     case "help":
     default:
         echo "Usage: $argv[0] [website] [action]\n";
         echo "actions - scan, status.deadlinks, status.links";
 }
 exit();
+
+function listWebsites() {
+    $result = mysql_query("SELECT * FROM website");
+    while($row = mysql_fetch_assoc($result)) {
+        echo $row['aid'] . " : " . $row['name'] . " : " . $row['url'] . PHP_EOL;
+    }
+}
 
 function scan($website, $wid) {
     global $time_limit, $max_queries;
@@ -105,6 +122,7 @@ function getWebsiteID($website) {
         $row = mysql_fetch_assoc($result);
         return $row['aid'];
     }
+    
     $name = $website;
     if (preg_match("/^(https?:\/\/)(.+)[\/\s]*/", $website, $matches)) {
         $name = $matches[2];
@@ -113,6 +131,8 @@ function getWebsiteID($website) {
     $sql = "INSERT INTO `website` (name,url) VALUE ('$name','$website')";
 
     mysql_query($sql);
+    
+    echo mysql_error();
 
     $wid = mysql_insert_id();
     insertPage($wid, '', 'page');
@@ -120,13 +140,13 @@ function getWebsiteID($website) {
     return $wid;
 }
 
-function insertPage($wid, $url, $type = "", $external=false, $title="") {
+function insertPage($wid, $url, $type = "", $external=false, $title="", $depth=0) {
     
     $title = cleanTitle($title);
     $type = clean($type);
     $url = clean($url);
     
-    $sql = "INSERT INTO `page` (website,url,type,crawl,title) VALUE ('$wid','$url','page',".($external?0:1).",'$title')";
+    $sql = "INSERT INTO `page` (website,url,type,crawl,title,`depth`) VALUE ('$wid','$url','page',".($external?0:1).",'$title','$depth')";
     mysql_query($sql);
     return mysql_insert_id();
 }
@@ -137,7 +157,7 @@ function cleanTitle($title){
         
         $attributes = array_combine($attributes[1],$attributes[2]);
         if(isset($attributes['src'])){
-            $title = "Image Link: ".$attributes['url'];
+            $title = "Image Link: ".$attributes['src'];
             if(isset($attributes['height'],$attributes['width'])){
                 $title .= " (" .$attributes['width'] ."x".$attributes['height'].")";
             }
@@ -163,6 +183,9 @@ function clean($value){
     if($value instanceof String){
         return mysql_real_escape_string($value);
     }
+    $value = preg_replace("/\s\s+/"," ",$value);
+    $value = trim($value);
+    
     return $value;
 }
 
@@ -205,35 +228,65 @@ function recordAccess($page, $result) {
         }
     }
     
-    if(isset($result['title'])){
-        $type .= ", title=\"".clean($result[title])."\" ";
+    if(!empty($result['title'])){
+        $type .= ", title=\"".clean($result['title'])."\" ";
     }
 
-    $sql = "UPDATE `page` SET ts_last = CURRENT_TIMESTAMP, status = '".clean($result[code])."' $type WHERE aid = $page[aid]";
+    $sql = "UPDATE `page` SET ts_last = CURRENT_TIMESTAMP, status = '".clean($result['code'])."' $type WHERE aid = $page[aid]";
     mysql_query($sql);
     debug(mysql_error());
 }
 
 function insertLink($parent, $url, $title="", $external=false) {
+    if($url == "/"){
+        $url = "";
+    }
+    
     if($title == "" ){
         $title = $url;
     }
+    $depth = $parent['depth']+1;
     
     $title = cleanTitle($title);
     //Get an existing page if it exists
-    $sql = "SELECT aid FROM `page` WHERE url = '$url' AND website = '$parent[website]'";
+    $sql = "SELECT aid, depth FROM `page` WHERE url = '$url' AND website = '$parent[website]'";
     $query = mysql_query($sql);
     $aid = 0;
     if (mysql_num_rows($query) > 0) {
         $row = mysql_fetch_assoc($query);
         $aid = $row['aid'];
+        if($row['depth']>$depth){
+            $sql = "UPDATE `page` SET `depth` = '$depth' WHERE aid = $row[aid]";
+            mysql_query($sql);
+        }
     } else {
-        $aid = insertPage($parent['website'], $url,"", $external,$title);
+        $aid = insertPage($parent['website'], $url,"", $external,$title, $depth);
     }
-
-    $sql = "INSERT IGNORE INTO `link` (parent,child,link_title) VALUE ($parent[aid],$aid, '$title')";
+//    $sql = "SELECT 1 FROM `link` WHERE `child` = $aid AND link_title = '$title' AND `permanent` = 1";
+//    $result = mysql_query($sql);
+//    if(mysql_num_rows($result) > 0){
+//        $sql = "SELECT `depth` FROM `link` WHERE `child` = $aid AND link_title = '$title'";
+//        $row = mysql_fetch_assoc($query);
+//        if($row['depth']>$depth){
+//            $sql = "UPDATE `link` SET `depth` = '$depth' WHERE  `child` = $aid AND link_title = '$title'";
+//            mysql_query($sql);
+//        }
+//        return; // Don't do anything with the link
+//    }
+    
+    $sql = "INSERT IGNORE INTO `link` (parent,child,link_title,depth) VALUE ($parent[aid],$aid, '$title','$depth')";
     mysql_query($sql);
     echo mysql_error();
+    
+    $sql = "SELECT COUNT(*) as links, parent FROM `link` WHERE `child` = $aid AND link_title = '$title' ORDER BY `depth`";
+    $result = mysql_query($sql);
+    $row = mysql_fetch_assoc($result);
+    if($row['links'] > 5){
+        $sql = "UPDATE `link` SET `hidden` = 1 WHERE `parent` != $row[parent] AND `child` = $aid";
+        mysql_query($sql);
+        echo mysql_error();
+    }
+    
 }
 
 function scanPage($page) {
@@ -259,6 +312,8 @@ function scanPage($page) {
         curl_setopt($ch, CURLOPT_NOBODY, true);
         debug("No body : ");
     }
+    
+    curl_setopt($ch, CURLOPT_HEADER, TRUE);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
     curl_setopt($ch, CURLOPT_URL, $url);
@@ -272,9 +327,13 @@ function scanPage($page) {
     $size = curl_getinfo($ch, CURLINFO_SIZE_DOWNLOAD);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $type = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    $effective_url = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+    
+    debug($effective_url.PHP_EOL);
 
     if (curl_errno($ch)) {
         $error = curl_error($ch);
+        $title = $url;
         try {
             curl_close($ch);
         } catch (Exception $exc) {
@@ -289,9 +348,11 @@ function scanPage($page) {
         
     }
     
-    if(preg_match_all("/<\s*title[^>]*>\s*(.+)\s*<\/\s*title\s*>/i", $html, $matches_title)){
-        $title = $matches_title[1][0];
+    if(preg_match("/<\s*title[^>]*>\s*(.+)\s*<\/\s*title\s*>/ims", $html, $matches_title)){
+        $title = preg_replace("/\s\s+/"," ",$matches_title[1]);
         debug("Page title: $title\n");
+    } else {
+        $title = NULL;
     }
     
     if ($page['crawl'] == 0) {
@@ -316,13 +377,13 @@ function scanPage($page) {
 //        }
         if(strpos($var,"#") !== FALSE) {
             debug("Before: $var      ");
-            $var = preg_replace("/#[\w-]+$/","",$var);
+            $var = preg_replace("/#.+$/","",$var);
             debug("After: $var\n");
         }
-        if (preg_match("/^\//", $var)) {
-            insertLink($page, $var, $link_title);
-        } else {
-            debug("External Link : " . $var . "\n");
+        if(empty($var)){
+            continue;
+        }
+        debug("URL: $var\n");
             if(preg_match("/^https?:\/\/([^\/]+)(.*)?$/", $var, $url)){
                 $domain = $url[1];
                 $link = $url[2];
@@ -332,46 +393,70 @@ function scanPage($page) {
                 } else {
                     insertLink($page, $var, $link_title, true);
                 }
-                
-            }            
-        }
+            } else {
+                if (!preg_match("/^\//", $var)) {
+                    $var = $effective_url."/".$var;
+                }
+                insertLink($page, $var, $link_title);
+            }   
+            
+        debug("Final URL: $var\n");
     }
 //    preg_match_all("/link[\s]+[^>]*?href[\s]?=[\s\"\']+" .
 //            "(.*?)[\"\']+.*?\/>/", $html, $matches);
-    preg_match_all("/<link[^>]+\/>/", $html, $matches);
+    preg_match_all("/<link[^>]+>/i", $html, $matches);
 
     $matches = $matches[0];
+    debug("Links found" . count($matches) . PHP_EOL);
 
     foreach ($matches as $var) {
         $url = "";
         $ltype = "";
+        
+            debug("Link : " . $var . PHP_EOL);
         if(preg_match("/href=\s*('[^']*'|\"[^\"]*\")/",$var, $m)){
             $url = substr($m[1],1,-1);
         } else {
             continue;
         }
+        if(preg_match("/rel=\s*('[^']*'|\"[^\"]*\")/",$var, $m)){
+            $ltype = substr($m[1],1,-1) . " -";
+        }
         if(preg_match("/type=\s*('[^']*'|\"[^\"]*\")/",$var, $m)){
-            $ltype = substr($m[1],1,-1);
+            $ltype = substr($m[1],1,-1) . " -";
         }
-        debug("Link URL: $ltype :  $url\n");
+        debug("Link URL: $ltype $url\n");
         
-        if (preg_match("/^\//", $url)) {
-            insertLink($page, $url, "Resource: $ltype - " . array_pop(explode('/',$url)));
+        if(preg_match("/^https?:\/\/([^\/]+)(.*)?$/", $var, $url_match)){
+            $domain = $url_match[1];
+            $link = $url_match[2];
+            debug("$domain | $link\n");
+            if($domain == $website){
+                insertLink($page, $link, "Resource: $ltype " .  array_pop(explode('/',$link)));
+            } else {
+                insertLink($page, $url[2], "Resource: $ltype " .  array_pop(explode('/',$link)), true); 
+            }
         } else {
-            debug("External Link : " . $url . "\n");
-            if(preg_match("/^https?:\/\/([^\/]+)(.*)?$/", $url, $surl)){
-                $domain = $surl[1];
-                $link = $surl[2];
-                debug("$domain | $link\n");
-                if($domain == $website){
-                    
-                    insertLink($page, $link, "Resource: $ltype - " .  array_pop(explode('/',$url)));
-                } else {
-                    insertLink($page, $url, "Resource: $ltype", true);
-                }
-                
-            }            
-        }
+            insertLink($page, $url,  "Resource: $ltype " . array_pop(explode('/',$url)));
+        }   
+//        
+//        if (preg_match("/^\//", $url)) {
+//            insertLink($page, $url, "Resource: $ltype " . array_pop(explode('/',$url)));
+//        } else {
+//            debug("External Link : " . $url . "\n");
+//            if(preg_match("/^https?:\/\/([^\/]+)(.*)?$/", $url, $surl)){
+//                $domain = $surl[1];
+//                $link = $surl[2];
+//                debug("$domain | $link\n");
+//                if($domain == $website){
+//                    
+//                    insertLink($page, $link, "Resource: $ltype - " .  array_pop(explode('/',$url)));
+//                } else {
+//                    insertLink($page, $url, "Resource: $ltype", true);
+//                }
+//                
+//            }            
+//        }
     }
     
     if(preg_match('/Error:?\s*(\d)/',$title,$matches)){

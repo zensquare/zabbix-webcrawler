@@ -1,8 +1,10 @@
 <?php
+define("ZABBIX_CRAWLER", true);
 include('config.php');
 
-$pid = filter_input(INPUT_GET, 'pid');
-$wid = filter_input(INPUT_GET, 'wid');
+
+$pid = mysql_real_escape_string(filter_input(INPUT_GET, 'pid'));
+$wid = mysql_real_escape_string(filter_input(INPUT_GET, 'wid'));
 
 
 if(!$pid && $wid){
@@ -13,9 +15,9 @@ if(!$pid && $wid){
     }
 }
 
-$data = filter_input(INPUT_GET, 'data');
-$x = filter_input(INPUT_GET, 'x');
-$y = filter_input(INPUT_GET, 'y');
+$data = mysql_real_escape_string(filter_input(INPUT_GET, 'data'));
+$x = mysql_real_escape_string(filter_input(INPUT_GET, 'x'));
+$y = mysql_real_escape_string(filter_input(INPUT_GET, 'y'));
 
 if (!$x) {
     $x = 0;
@@ -36,6 +38,7 @@ if ($data) {
         <script src="sigma/sigma.min.js"></script>
         <script src="sigma/plugins/sigma.layout.forceAtlas2.min.js"></script>
         <script src="sigma/plugins/sigma.parsers.json.min.js"></script>
+        <script src="sigma/plugins/sigma.renderers.customShapes.min.js"></script>
         <script src="sigma/plugins/sigma.renderers.customShapes.min.js"></script>
         <script src="jquery/jquery-1.7.2.min.js"></script>
         <style>
@@ -172,8 +175,16 @@ if ($data) {
                 graph: g,
                 renderer: {
                     container: document.getElementById('sigma-container'),
-                    type: 'canvas'
-                }
+                    type: 'canvas',
+                },
+                settings: {
+                    labelThreshold: 1,
+                    drawEdgeLabels: true,
+                    minEdgeSize: 1,
+                    maxEdgeSize: 2,
+                    sideMargin: 10,
+                  }
+                
             });
             
             filteredNodes = [];
@@ -227,7 +238,9 @@ if ($data) {
                 });
                 
                 s.refresh();
-                s.startForceAtlas2();
+                s.startForceAtlas2({
+                    strongGravityMode     : true
+                });
             }
             
             function filterNode(node){
@@ -418,6 +431,7 @@ function echoNode($row) {
         $size = 3;
     }
     
+    
     $node = array(
         "pid" => $row[aid],
         "id" => "n-$row[aid]",
@@ -442,7 +456,7 @@ function startsWith($haystack, $needle)
 
 function loadEdges($pid) {
     $first = true;
-    $sql = "SELECT * FROM link WHERE parent = '$pid' AND child != 0";
+    $sql = "SELECT * FROM link WHERE parent = '$pid' AND child != 0 AND hidden = 0";
     $result = mysql_query($sql);
     $edge_ids = array();
     while ($row = mysql_fetch_assoc($result)) {
@@ -456,12 +470,13 @@ function loadEdges($pid) {
             "source"=>"n-$row[parent]",
             "target"=>"n-$row[child]",
             "size"=>2,
+            "label"=>trim($row['link_title']),
             "type"=>"curvedArrow"
         );
         $edge_ids[$edge['id']] = true ;
         echo json_encode($edge);
     }    
-    $sql = "SELECT * FROM link WHERE child = '$pid' AND parent != 0";
+    $sql = "SELECT * FROM link WHERE child = '$pid' AND parent != 0 AND hidden = 0";
     $result = mysql_query($sql);
     while ($row = mysql_fetch_assoc($result)) {
         $eid = "e-$row[parent]-$row[child]";
@@ -478,6 +493,7 @@ function loadEdges($pid) {
             "source"=>"n-$row[parent]",
             "target"=>"n-$row[child]",
             "size"=>2,
+            "label"=>trim($row['link_title']),
             "type"=>"curvedArrow"
         );
         echo json_encode($edge);
