@@ -1,5 +1,5 @@
 <?php
-if !defined("ZABBIX_CRAWLER") die;
+if (!defined("ZABBIX_CRAWLER")) { die;}
 
 /* CONFIG STUFF */
 $DATABASE_HOST = "localhost";
