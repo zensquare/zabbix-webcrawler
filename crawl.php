@@ -44,18 +44,25 @@ switch ($action) {
     case "list":
         listWebsites();
         break;
+    case "clear":
+        clear($wid);
+        break;
     case "help":
     default:
         echo "Usage: $argv[0] [website] [action]\n";
-        echo "actions - scan, status.deadlinks, status.links";
+        echo "actions - scan, status.deadlinks, status.links, clear";
 }
 exit();
 
 function listWebsites() {
-    $result = mysql_query("SELECT * FROM website");
+    $result = mysql_query("SELECT * FROM `website`");
     while($row = mysql_fetch_assoc($result)) {
         echo $row['aid'] . " : " . $row['name'] . " : " . $row['url'] . PHP_EOL;
     }
+}
+
+function clear($wid){
+    mysql_query("DELETE FROM `website` WHERE aid = $wid");
 }
 
 function scan($website, $wid) {
