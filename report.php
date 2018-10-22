@@ -8,7 +8,7 @@ $wid = mysql_real_escape_string(filter_input(INPUT_GET, 'wid'));
 
 
 if(!$pid && $wid){
-    $sql = "SELECT aid FROM $DATABASE_SCHEMA.page WHERE website = '$wid' AND url = ''";
+    $sql = "SELECT aid FROM `page` WHERE website = '$wid' AND url = ''";
     $result = mysql_query($sql);
     if($row = mysql_fetch_assoc($result)){
         $pid = $row['aid'];
@@ -377,7 +377,7 @@ function loadData($pid) {
 
 function loadNodes($pid) {
     $first = true;
-    $sql = "SELECT p.*, w.url as website_url, GREATEST(1,round(log(count(*)))) size, count(*) child_count FROM zabbix_spider.page p LEFT JOIN zabbix_spider.website w ON w.aid = p.website LEFT JOIN zabbix_spider.link l1 ON (l1.parent = p.aid OR l1.parent is null) WHERE p.aid IN ( SELECT child FROM zabbix_spider.link l2 WHERE l2.parent = $pid) OR p.aid = $pid GROUP BY p.aid;";
+    $sql = "SELECT p.*, w.url as website_url, GREATEST(1,round(log(count(*)))) size, count(*) child_count FROM `page` p LEFT JOIN `website` w ON w.aid = p.website LEFT JOIN `link` l1 ON (l1.parent = p.aid OR l1.parent is null) WHERE p.aid IN ( SELECT child FROM `link` l2 WHERE l2.parent = $pid) OR p.aid = $pid GROUP BY p.aid;";
     $result = mysql_query($sql);
     echo mysql_error();
     $loaded = array();
@@ -390,7 +390,7 @@ function loadNodes($pid) {
         }
         echoNode($row);
     }
-    $sql = "SELECT p.*, w.url as website_url, GREATEST(1,round(log(count(*)))) size, count(*) child_count FROM zabbix_spider.page p LEFT JOIN zabbix_spider.website w ON w.aid = p.website LEFT JOIN zabbix_spider.link l1 ON (l1.child = p.aid) WHERE p.aid IN ( SELECT parent FROM zabbix_spider.link l2 WHERE l2.child = $pid) GROUP BY p.aid;";
+    $sql = "SELECT p.*, w.url as website_url, GREATEST(1,round(log(count(*)))) size, count(*) child_count FROM `page` p LEFT JOIN `website` w ON w.aid = p.website LEFT JOIN `link` l1 ON (l1.child = p.aid) WHERE p.aid IN ( SELECT parent FROM `link` l2 WHERE l2.child = $pid) GROUP BY p.aid;";
     $result = mysql_query($sql);
     echo mysql_error();
     while ($row = mysql_fetch_assoc($result)) {
